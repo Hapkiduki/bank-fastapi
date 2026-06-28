@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 
+.agents
 .envs/*
 !.envs/.env.example
 

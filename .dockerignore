@@ -1,0 +1,16 @@
+.git/
+.agents/
+.DS_Store
+*.pyc
+*.pyo
+__pycache__/
+.vscode
+.idea
+venv/
+.venv/
+.ruff_cache/
+.pytest_cache/
+tests/
+*.log
+.python-version
+.envs/*

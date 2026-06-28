@@ -1,0 +1,31 @@
+# Local development only. The insecure API/dashboard below must never be
+# enabled in staging or production.
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: DEBUG
+  format: json
+
+# Write access logs to stdout so `docker logs traefik` captures them
+# (no orphaned on-disk path / unmounted volume).
+accessLog:
+  format: json
+
+middlewares:
+  retry:
+    retry:
+      attempts: 3
+      initialInterval: "500ms"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    watch: true
+    exposedByDefault: false
+    network: bankito_local_nw
+
+entryPoints:
+  web:
+    address: ":80"

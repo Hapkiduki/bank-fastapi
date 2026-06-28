@@ -1,17 +1,47 @@
 [project]
 name = "bank-fastapi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Advance backend for bank system using FastAPI and SQLModel"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "alembic>=1.15.2",
-    "argon2-cffi>=23.1.0",
-    "asyncpg>=0.30.0",
-    "fastapi[standard]>=0.115.12",
-    "greenlet>=3.2.2",
+    "alembic>=1.18.5",
+    "argon2-cffi>=25.1.0",
+    "asyncpg>=0.31.0",
+    "fastapi[standard]==0.138.0",
+    "greenlet>=3.5.3",
     "loguru>=0.7.3",
-    "psycopg[binary-pool]>=3.2.9",
-    "pydantic-settings>=2.9.1",
-    "sqlmodel>=0.0.24",
+    "psycopg[binary-pool]>=3.3.4",
+    "pydantic-settings>=2.14.2",
+    "sqlmodel>=0.0.39",
 ]
+
+[build-system]
+requires = ["uv_build>=0.7,<0.9"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "app"
+module-root = "backend"
+
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "FAST"]
+ignore = [
+    "B008", # FastAPI relies on calling Depends()/Query() in argument defaults.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

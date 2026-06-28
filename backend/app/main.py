@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from .api.main import api_router
+from .api.routes import health
 from .core.config import settings
 from contextlib import asynccontextmanager
 from .core.db import init_db
@@ -20,4 +21,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Health check is mounted at the app root (no API_V1_STR prefix) so the
+# Traefik load-balancer healthcheck on `/health` resolves.
+app.include_router(health.router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
