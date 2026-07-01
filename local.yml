@@ -10,6 +10,8 @@ services:
       - ./backend/docker/local/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
     networks:
       - bankito_local_nw
+    command:
+      - --providers.docker
 
   api: &api
     build:
@@ -28,6 +30,10 @@ services:
       postgres:
         condition: service_healthy
       mailpit:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
         condition: service_started
     command: /start.sh
     networks:
@@ -76,6 +82,62 @@ services:
     networks:
       - bankito_local_nw
 
+  redis:
+    image: docker.io/redis:8.8.0-alpine
+    command: redis-server --appendonly yes
+    networks:
+      - bankito_local_nw
+  
+  rabbitmq:
+    image: docker.io/rabbitmq:3.13-management-alpine
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    volumes:
+      - bankito_local_rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bankito_local_nw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.entrypoints=web"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)"
+      - "traefik.http.routers.rabbitmq.service=rabbitmq-service"
+      - "traefik.http.services.rabbitmq-service.loadbalancer.server.port=15672"
+
+  celeryworker:
+    <<: *api
+    ports: []
+    command: /start-celeryworker.sh
+    # Override the inherited api labels: workers don't serve HTTP, so they must
+    # not register the `api` Traefik router/service (would appear as DOWN backends).
+    labels:
+      - "traefik.enable=false"
+
+  flower:
+    <<: *api
+    ports:
+      - "5555:5555"
+    volumes:
+      - bankito_local_flower_data:/data
+    command: /start-flower.sh
+    depends_on:
+      - redis
+      - rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flower.entrypoints=web"
+      - "traefik.http.routers.flower.rule=Host(`flower.localhost`)"
+      - "traefik.http.routers.flower.service=flower-service"
+      - "traefik.http.services.flower-service.loadbalancer.server.port=5555"
+  
+  celerybeat:
+    <<: *api
+    ports: []
+    command: /start-celerybeat.sh
+    labels:
+      - "traefik.enable=false"
+
+
 networks:
   bankito_local_nw:
     external: true
@@ -83,3 +145,5 @@ networks:
 volumes:
   bankito_local_db:
   bankito_local_mailpit_data:
+  bankito_local_rabbitmq_data:
+  bankito_local_flower_data:
