@@ -1,0 +1,181 @@
+services:
+  traefik:
+    image: docker.io/traefik:v3.7.5
+    restart: unless-stopped
+    env_file:
+      - ./.envs/.env.production
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:  
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certificates:/certificates
+      - traefik-logs:/var/log/traefik
+    networks:
+      - bankito_prod_nw
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=api.bankito@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/certificates/acme.json"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--accesslog=true"
+      - "--accesslog.filePath=/var/log/traefik/access.log"
+      - "--log.filePath=/var/log/traefik/traefik.log"
+      - "--log.level=INFO"
+      - "--api.dashboard=false"
+
+  api: &api
+    build:
+      context: .
+      dockerfile: ./backend/docker/production/fastapi/Dockerfile
+    volumes:
+      - api_logs:/src/backend/app/logs
+    expose:
+      - "8000"
+    env_file:
+      - ./.envs/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    command: /start.sh
+    networks:
+      - bankito_prod_nw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.rule=Host(`api.devpulse.org`)"
+      - "traefik.http.routers.api.tls.certresolver=myresolver"
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.timeout=5s"
+      - "traefik.http.services.api-service.loadbalancer.server.port=8000"
+  
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    ports:
+      - "4000:4000"
+    volumes:
+      - bankito_mlflow_data_prod:/mlflow
+    env_file:
+      - ./.envs/.env.production
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 4000 
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI} 
+      --artifacts-destination ${MLFLOW_ARTIFACTS_DESTINATION} 
+      --serve-artifacts 
+    depends_on:
+      - postgres
+    networks:
+      - bankito_prod_nw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mlflow.entrypoints=websecure"
+      - "traefik.http.routers.mlflow.rule=Host(`mlflow.devpulse.org`)"
+      - "traefik.http.routers.mlflow.tls.certresolver=myresolver"
+      - "traefik.http.services.mlflow.loadbalancer.server.port=4000"
+    
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./backend/docker/production/postgres/Dockerfile
+    ports:
+      - "5432:5432"
+    volumes:
+      - bankito_prod_db:/var/lib/postgresql/data
+    env_file:
+      - ./.envs/.env.production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bankito_prod_nw
+
+  redis:
+    image: docker.io/redis:8.8.0-alpine
+    command: redis-server --appendonly yes
+    networks:
+      - bankito_prod_nw
+  
+  rabbitmq:
+    image: docker.io/rabbitmq:3.13-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    volumes:
+      - rabbitmq_data_prod:/var/lib/rabbitmq
+    networks:
+      - bankito_prod_nw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.devpulse.org`)"
+      - "traefik.http.routers.rabbitmq.tls.certresolver=myresolver"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+  celeryworker:
+    <<: *api
+    ports: []
+    command: /start-celeryworker.sh
+    labels:
+      - "traefik.enable=false"
+
+  flower:
+    <<: *api
+    ports:
+      - "5555:5555"
+    volumes:
+      - bankito_flower_data_prod:/data
+    command: /start-flower.sh
+    depends_on:
+      - redis
+      - rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flower.entrypoints=websecure"
+      - "traefik.http.routers.flower.rule=Host(`flower.devpulse.org`)"
+      - "traefik.http.routers.flower.tls.certresolver=myresolver"
+      - "traefik.http.services.flower.loadbalancer.server.port=5555"
+  
+  celerybeat:
+    <<: *api
+    ports: []
+    command: /start-celerybeat.sh
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - bankito_prod_nw
+    volumes:
+      - celerybeat_data:/tmp
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  bankito_prod_nw:
+    external: true
+
+volumes:
+  api_logs:
+  bankito_prod_db:
+  bankito_flower_data_prod:
+  rabbitmq_data_prod:
+  bankito_mlflow_data_prod:
+  portainer_data_prod:
+  celerybeat_data:
+  traefik-certificates:
+  traefik-logs:
+  

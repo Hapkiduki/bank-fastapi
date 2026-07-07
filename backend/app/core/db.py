@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -8,6 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from backend.app.core.config import settings
 from backend.app.core.logging import get_logger
+from backend.app.core.model_registry import load_models
 
 logger = get_logger()
 
@@ -24,7 +25,7 @@ engine = create_async_engine(
 async_session = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     session = async_session()
     try:
         yield session
@@ -48,6 +49,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     try:
+        load_models()
+        logger.info("Models loaded successfully")
+
         max_retries = 3
         retry_delay = 2
 

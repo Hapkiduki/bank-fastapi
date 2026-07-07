@@ -6,4 +6,4 @@ set -o nounset
 
 set -o pipefail
 
-exec watchfiles --filter python celery.__main__.main --args '-A backend.app.core.celery_app worker -Q bankito_tasks -l INFO'
+exec watchfiles --filter python celery.__main__.main --args '-A backend.app.core.celery_app worker -Q bankito_tasks,ml_tasks -l INFO'

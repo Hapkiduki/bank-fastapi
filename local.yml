@@ -35,6 +35,8 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_started
+      mlflow:
+        condition: service_started
     command: /start.sh
     networks:
       - bankito_local_nw
@@ -47,6 +49,32 @@ services:
       - "traefik.http.services.api-service.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.api-service.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.api-service.loadbalancer.healthcheck.timeout=5s"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    ports:
+      - "4000:4000"
+    volumes:
+      - bankito_mlflow_data:/mlflow
+    env_file:
+      - ./.envs/.env.local
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 4000 
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI} 
+      --artifacts-destination ${MLFLOW_ARTIFACTS_DESTINATION} 
+      --serve-artifacts 
+    depends_on:
+      - postgres
+    networks:
+      - bankito_local_nw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mlflow.entrypoints=web"
+      - "traefik.http.routers.mlflow.rule=Host(`mlflow.localhost`)"
+      - "traefik.http.routers.mlflow.service=mlflow-service"
+      - "traefik.http.services.mlflow-service.loadbalancer.server.port=4000"
 
   mailpit:
     image: docker.io/axllent/mailpit:v1.30
@@ -147,3 +175,4 @@ volumes:
   bankito_local_mailpit_data:
   bankito_local_rabbitmq_data:
   bankito_local_flower_data:
+  bankito_mlflow_data:

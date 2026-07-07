@@ -1,7 +1,8 @@
 import os
 
-from .config import settings
 from loguru import logger
+
+from backend.app.core.config import settings
 
 logger.remove()
 
@@ -9,7 +10,7 @@ LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 
 LOG_FORMAT = (
     "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
-    "{level: < 8} |"
+    "{level: <8} | "
     "{name}:{function}:{line} - "
     "{message}"
 )
@@ -23,6 +24,7 @@ logger.add(
     retention="30 days",
     compression="zip",
 )
+
 logger.add(
     sink=os.path.join(LOG_DIR, "error.log"),
     format=LOG_FORMAT,
